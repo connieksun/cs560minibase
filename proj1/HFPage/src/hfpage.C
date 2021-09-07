@@ -6,6 +6,11 @@
 #include "buf.h"
 #include "db.h"
 
+/*
+ * Authors: Connie Sun and Bailey Thompson
+ * Course: CSC 560, Fall 2021
+ */
+
 // **********************************************************
 // page class constructor
 
@@ -16,7 +21,7 @@ void HFPage::init(PageId pageNo)
   curPage = pageNo;
   slotCnt = 0;
   freeSpace = MAX_SPACE - DPFIXED + sizeof(slot_t);
-  usedPtr = MAX_SPACE - DPFIXED - 1; // i of last byte in data
+  usedPtr = MAX_SPACE - DPFIXED ; // index + 1
 
   slot[0].length = EMPTY_SLOT;
 }
@@ -97,7 +102,7 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
     rid.pageNo = curPage;
     rid.slotNo = freeSlot;
     // copy into data
-    memcpy(&data[usedPtr], recPtr, recLen);
+    memcpy(data + usedPtr, recPtr, recLen);
     return OK;
 }
 
@@ -118,7 +123,7 @@ Status HFPage::deleteRecord(const RID& rid)
 	if (usedPtr != recStart) { // there are records to compact up in data
 		int lenToMove = recStart - usedPtr;	// length of records to move
 		// move prior records up by the amount of deleted space
-		memmove(&data[usedPtr + delSpace], &data[usedPtr], lenToMove);
+		memmove(data + usedPtr + delSpace, data + usedPtr, lenToMove);
 		for (int i = 0; i < slotCnt; i++) {
 			if (slot[i].length != EMPTY_SLOT && slot[i].offset < recStart) {
 				slot[i].offset += delSpace;
@@ -176,7 +181,7 @@ Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 					slotNo < 0 || slot[slotNo].length == EMPTY_SLOT) return FAIL;
     recLen = slot[slotNo].length;
     int recStart = slot[slotNo].offset;
-    memcpy(recPtr, &data[recStart], recLen);
+    memcpy(recPtr, data + recStart, recLen);
     return OK;
 }
 
@@ -187,9 +192,9 @@ Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 // in recPtr.
 Status HFPage::returnRecord(RID rid, char*& recPtr, int& recLen)
 {
-	if (rid.pageNo != curPage || rid.slotNo >= slotCnt ||
-					rid.slotNo < 0 || slot[rid.slotNo].length == EMPTY_SLOT) return FAIL;
-    int slotNo = rid.slotNo;
+	int slotNo = rid.slotNo;
+	if (rid.pageNo != curPage || slotNo >= slotCnt ||
+					slotNo < 0 || slot[slotNo].length == EMPTY_SLOT) return FAIL;
     recLen = slot[slotNo].length;
     int recStart = slot[slotNo].offset;
     recPtr = &data[recStart];
@@ -200,7 +205,7 @@ Status HFPage::returnRecord(RID rid, char*& recPtr, int& recLen)
 // Returns the amount of available space on the heap file page
 int HFPage::available_space(void)
 {
-    return freeSpace - sizeof(slot);
+    return freeSpace - sizeof(slot_t);
 }
 
 // **********************************************************
