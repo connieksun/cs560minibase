@@ -15,8 +15,8 @@ void HFPage::init(PageId pageNo)
   prevPage = INVALID_PAGE;
   curPage = pageNo;
   slotCnt = 0;
-  usedPtr = MAX_SPACE - DPFIXED - 1; // i of last byte in data
   freeSpace = MAX_SPACE - DPFIXED + sizeof(slot_t);
+  usedPtr = MAX_SPACE - DPFIXED - 1; // i of last byte in data
 
   slot[0].length = EMPTY_SLOT;
 }
@@ -108,6 +108,9 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
 Status HFPage::deleteRecord(const RID& rid)
 {
 	int slotNo = rid.slotNo;
+	// check that the record actually exists in the page
+	if (rid.pageNo != curPage || slotNo >= slotCnt ||
+			slotNo < 0 || slot[slotNo].length == EMPTY_SLOT) return FAIL;
 	int recStart = slot[slotNo].offset; // start of record to delete
 	int delSpace = slot[slotNo].length; // amount of space deleted
 	if (slot[slotNo].length == EMPTY_SLOT) return DONE; // what to return if not in here?
@@ -124,6 +127,11 @@ Status HFPage::deleteRecord(const RID& rid)
 	}
 	usedPtr += delSpace;
 	freeSpace += delSpace;
+	// compacting end of slot array
+	while (slotCnt > 0 && slot[slotCnt-1].length == EMPTY_SLOT) {
+		freeSpace += sizeof(slot_t);
+		slotCnt--;
+	}
     return OK;
 }
 
@@ -146,7 +154,9 @@ Status HFPage::firstRecord(RID& firstRid)
 // returns DONE if no more records exist on the page; otherwise OK
 Status HFPage::nextRecord (RID curRid, RID& nextRid)
 {
-    int curSlotNo = curRid.slotNo;
+	int curSlotNo = curRid.slotNo;
+	if (curRid.pageNo != curPage || curSlotNo >= slotCnt ||
+				curSlotNo < 0 || slot[curSlotNo].length == EMPTY_SLOT) return FAIL;
     for (int i = curSlotNo + 1; i < slotCnt; i++) {
     	if (slot[i].length != EMPTY_SLOT){
     		nextRid.pageNo = curPage;
@@ -161,7 +171,9 @@ Status HFPage::nextRecord (RID curRid, RID& nextRid)
 // returns length and copies out record with RID rid
 Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 {
-    int slotNo = rid.slotNo;
+	int slotNo = rid.slotNo;
+	if (rid.pageNo != curPage || slotNo >= slotCnt ||
+					slotNo < 0 || slot[slotNo].length == EMPTY_SLOT) return FAIL;
     recLen = slot[slotNo].length;
     int recStart = slot[slotNo].offset;
     memcpy(recPtr, &data[recStart], recLen);
@@ -175,6 +187,8 @@ Status HFPage::getRecord(RID rid, char* recPtr, int& recLen)
 // in recPtr.
 Status HFPage::returnRecord(RID rid, char*& recPtr, int& recLen)
 {
+	if (rid.pageNo != curPage || rid.slotNo >= slotCnt ||
+					rid.slotNo < 0 || slot[rid.slotNo].length == EMPTY_SLOT) return FAIL;
     int slotNo = rid.slotNo;
     recLen = slot[slotNo].length;
     int recStart = slot[slotNo].offset;
