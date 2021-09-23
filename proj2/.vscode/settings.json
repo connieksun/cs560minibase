@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "heapfile.C": "cpp",
+        "heap_driver.C": "cpp",
+        "scan.C": "cpp",
+        "page.C": "cpp"
+    }
+}
