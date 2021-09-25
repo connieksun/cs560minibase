@@ -3,6 +3,11 @@
         "heapfile.C": "cpp",
         "heap_driver.C": "cpp",
         "scan.C": "cpp",
-        "page.C": "cpp"
+        "page.C": "cpp",
+        "system_defs.C": "cpp",
+        "main.C": "cpp",
+        "hfpage.C": "cpp",
+        "new_error.C": "cpp",
+        "test_driver.C": "cpp"
     }
 }

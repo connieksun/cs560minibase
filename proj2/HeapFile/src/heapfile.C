@@ -100,6 +100,32 @@ int HeapFile::getRecCnt()
 Status HeapFile::insertRecord(char *recPtr, int recLen, RID& outRid)
 {
     // fill in the body
+
+    PageId pageId = firstDirPageId;
+    PageId nextPage = INVALID_PAGE;
+    PageId endPage = INVALID_PAGE;
+
+    HFPage *page;
+    HFPage *next;
+
+    Status status;
+    while(pageId != INVALID_PAGE) {
+      // pin the page
+      //MINIBASE_BM->pinPage(pageId, page);
+
+      status = page->insertRecord(recPtr, recLen, outRid);
+
+      nextPage = page->getNextPage();
+      MINIBASE_BM->unpinPage(pageId);
+
+      if (status == OK) break;
+      else {
+        endPage = pageId;
+        pageId = nextPage;
+        minibase_errors.clear_errors();
+      }
+    }
+
     return OK;
 } 
 
