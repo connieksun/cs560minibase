@@ -101,7 +101,7 @@ class HeapFile {
     Status findDataPage(const RID& rid, 
 			PageId &rpDirPageId, HFPage *&rpdirpage, 
 			PageId &rpDataPageId,HFPage *&rpdatapage, 
-			RID &rpDataPageRid);
+			const RID &rpDataPageRid);
 
     // put data page information (dpinfop) into a dir page(s)
     Status allocateDirSpace(struct DataPageInfo * dpinfop,/* data page information*/
