@@ -32,14 +32,14 @@ Scan::~Scan()
 // Also returns the RID of the retrieved record.
 Status Scan::getNext(RID& rid, char *recPtr, int& recLen)
 {
-  // TODO: checks and statuses
-	if (nxtUserStatus == 0) { // no next record
+	if (nxtUserStatus == 0) { // no next record to get
+		reset();
 		return DONE;
 	}
 	Status status;
-	rid = userRid;
+	rid = userRid; // userRid always holds the next non-returned Rid
 	status = dataPage->getRecord(userRid, recPtr, recLen);
-	status = mvNext(userRid);
+	status = mvNext(userRid); // move userRid to the next record
 	return OK;
 }
 
@@ -47,20 +47,29 @@ Status Scan::getNext(RID& rid, char *recPtr, int& recLen)
 // Do all the constructor work.
 Status Scan::init(HeapFile *hf)
 {
-  _hf = hf;
-  return firstDataPage();
+	_hf = hf;
+	dirPageId = INVALID_PAGE; // init page IDs
+	dataPageId = INVALID_PAGE;
+	nxtUserStatus = 1; // assume next record exists
+  return firstDataPage(); // pin the first data page
 }
 
 // *******************************************
 // Reset everything and unpin all pages.
 Status Scan::reset()
 {
-	// TODO: checks and statuses
 	Status status = OK;
-	status = MINIBASE_BM->unpinPage(dirPageId);
-	status = MINIBASE_BM->unpinPage(dataPageId);
+	if (dirPageId != INVALID_PAGE) {
+		status = MINIBASE_BM->unpinPage(dirPageId);
+		dirPageId = INVALID_PAGE;
+	}
+	if (dataPageId != INVALID_PAGE) {
+		status = MINIBASE_BM->unpinPage(dataPageId);
+		dataPageId = INVALID_PAGE;
+	}
 	dataPage = NULL;
 	dirPage = NULL;
+	nxtUserStatus = 1;
   return status;
 }
 
@@ -68,68 +77,71 @@ Status Scan::reset()
 // Copy data about first page in the file.
 Status Scan::firstDataPage()
 {
-	// TODO: lots of checks for empty
-	Status status = OK; // need to work on using this
+	char* dpInfoRecPtr;
+	int dpInfoRecLen;
+	DataPageInfo* dpInfoRecord;
+	Status status = OK;
 	// initialize cur dirPageID using header ID from hf
 	dirPageId = _hf->firstDirPageId;
-	// pin the first directory page; store in dirPage pointer
+	// pin the first directory page; store in dirPage
 	status = MINIBASE_BM->pinPage(dirPageId, (Page *&) dirPage);
 	// get the record ID of the first DataPageInfo record
 	status = dirPage->firstRecord(dataPageRid);
-	// get the ID of the data page; stored in the DataPageInfo record
-	dataPageId = dataPageRid.pageNo;
+	if (status == DONE) {
+		nxtUserStatus = 0; // empty header page, no records
+		return DONE;
+	}
+	// get the ID of the data page, stored in the DataPageInfo record
+	dirPage->returnRecord(dataPageRid, dpInfoRecPtr, dpInfoRecLen);
+	dpInfoRecord = (DataPageInfo*) dpInfoRecPtr;
+	dataPageId = dpInfoRecord->pageId; // get ID of the data page, stored in DataPageInfo record
 	// pin the first data page; store in dataPage pointer
 	status = MINIBASE_BM->pinPage(dataPageId, (Page *&) dataPage);
-
 	status = dataPage->firstRecord(userRid);
-
+	if (status == DONE)
+		nxtUserStatus = 0; // empty first data page, no records
   return status;
 }
 
 // *******************************************
 // Retrieve the next data page.
 Status Scan::nextDataPage(){
+	char* dpInfoRecPtr;
+	int dpInfoRecLen;
+	DataPageInfo* dpInfoRecord;
 	// TODO: add checks and statuses
 	Status status = OK;
-	status = MINIBASE_BM->unpinPage(dataPageId);
 	// get the record ID of the next data page info record in directory page
 	RID nextRid;
 	status = dirPage->nextRecord(dataPageRid, nextRid);
-	if (status == DONE) {
-		// move to the next directory page
+	if (status == DONE) { // no more data page info records, go to next directory page
 		status = nextDirPage();
-		if (status == DONE) {
-			// no more directory pages
+		if (status == DONE) { // no more directory pages
 			return DONE;
 		} // else, read the first record of new directory page
 		status = dirPage->firstRecord(nextRid);
+		if (status == DONE) return DONE; // no records on next dir page
 	}
+	status = MINIBASE_BM->unpinPage(dataPageId); // unpin current data page
 	dataPageRid = nextRid;
-	dataPageId = dataPageRid.pageNo;
+	dirPage->returnRecord(dataPageRid, dpInfoRecPtr, dpInfoRecLen);
+	dpInfoRecord = (DataPageInfo*) dpInfoRecPtr;
+	dataPageId = dpInfoRecord->pageId;
 	status = MINIBASE_BM->pinPage(dataPageId, (Page *&) dataPage);
-//	status = dataPage->firstRecord(userRid); // read the first record of new data page
   return status;
 }
 
 // *******************************************
 // Retrieve the next directory page.
 Status Scan::nextDirPage() {
-	// TODO: add checks and statuses
 	Status status = OK;
-	status = MINIBASE_BM->unpinPage(dirPageId);
+	status = MINIBASE_BM->unpinPage(dirPageId); // unpin current directory page
 	dirPageId = dirPage->getNextPage();
-	if (dirPageId == INVALID_PAGE) {
-		// no more directory pages
+	if (dirPageId == INVALID_PAGE) { // no more directory pages
 		return DONE;
 	}
-	status = MINIBASE_BM->pinPage(dirPageId, (Page *&) dirPage);
+	status = MINIBASE_BM->pinPage(dirPageId, (Page *&) dirPage); // pin new page
   return status;
-}
-
-// Look ahead the next record
-Status Scan::peekNext(RID& rid) {
-	rid = userRid;
-	return OK;
 }
 
 // Move to the next record in a sequential scan.
@@ -137,16 +149,16 @@ Status Scan::peekNext(RID& rid) {
 Status Scan::mvNext(RID& rid) {
 	Status status;
 	RID nextRid;
-	status = dataPage->nextRecord(userRid, nextRid);
-	if (status == DONE) {
+	status = dataPage->nextRecord(userRid, nextRid); // get next record on data page
+	if (status == DONE) { // if data page has no more records, go to next data page
 		status = nextDataPage();
-		if (status == DONE) {
-			nxtUserStatus = 0;
+		if (status == DONE) { // if no more data pages, no more records to read
+			nxtUserStatus = 0;// next record does not exist
 			return DONE;
 		}
-		status = dataPage->firstRecord(nextRid);
+		status = dataPage->firstRecord(nextRid); // get first record of new data page
 	}
 	rid = nextRid;
-	userRid = rid; // don't need this?
+	userRid = rid; // don't need this line I think
 	return status;
 }

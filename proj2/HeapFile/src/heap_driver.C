@@ -387,6 +387,10 @@ int HeapDriver::test3()
                      << " should be " << i << endl;
                 cerr << "rec.fval: "<< rec.fval
                      << " should be " << (i*7.0) << endl;
+                cerr << "rec2.ival: " << rec2.ival
+                	 << " should be " << i << endl;
+                cerr << "rec2.fval: " << rec2.fval
+                	 << " should be " << (i*7.0) << endl;
                 status = FAIL;
                 break;
               }
