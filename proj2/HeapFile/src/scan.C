@@ -12,6 +12,11 @@
 #include "buf.h"
 #include "db.h"
 
+/*
+ * Authors: Connie Sun and Bailey Thompson
+ * Course: CSC 560, Fall 2021
+ */
+
 // *******************************************
 // The constructor pins the first page in the file
 // and initializes its private data members from the private data members from hf
@@ -36,10 +41,9 @@ Status Scan::getNext(RID& rid, char *recPtr, int& recLen)
 		reset();
 		return DONE;
 	}
-	Status status;
 	rid = userRid; // userRid always holds the next non-returned Rid
-	status = dataPage->getRecord(userRid, recPtr, recLen);
-	status = mvNext(userRid); // move userRid to the next record
+	dataPage->getRecord(userRid, recPtr, recLen);
+	mvNext(userRid); // move userRid to the next record
 	return OK;
 }
 
