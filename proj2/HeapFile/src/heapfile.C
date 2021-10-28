@@ -1,6 +1,12 @@
 #include "heapfile.h"
 
 #include <iostream>
+
+/*
+ * Authors: Connie Sun and Bailey Thompson
+ * Course: CSC 560, Fall 2021
+ */
+
 // ******************************************************
 // Error messages for the heapfile layer
 
@@ -60,19 +66,9 @@ HeapFile::HeapFile( const char *name, Status& returnStatus )
 // Destructor
 HeapFile::~HeapFile()
 {
-   // fill in the body 
-
-   if (file_deleted != 1) {
-     Status status = deleteFile();
-
-     if (status != OK) {
-       delete[] fileName;
-       return;
-     }
-   }
-   delete[] fileName;
-   fileName = NULL;
-
+	if (fileName == NULL && file_deleted != 1) {
+		deleteFile();
+	}
 }
 
 // *************************************
@@ -193,9 +189,9 @@ Status HeapFile::insertRecord(char *recPtr, int recLen, RID& outRid)
 		dpInfoRecord->recct = dpInfoRecord->recct + 1;
     }
     if (dirPageId != INVALID_PAGE)
-    	MINIBASE_BM->unpinPage(dirPageId);
+    	MINIBASE_BM->unpinPage(dirPageId, true);
     if (dataPageId != INVALID_PAGE)
-    	MINIBASE_BM->unpinPage(dataPageId);
+    	MINIBASE_BM->unpinPage(dataPageId, true);
     return status;
 } 
 
@@ -211,8 +207,8 @@ Status HeapFile::deleteRecord (const RID& rid)
 	if (findDataPage(rid, dirPageId, dirPage, dataPageId, dataPage, dataPageRid) == OK) {
 		//found record
 		status = dataPage->deleteRecord(rid);
-		MINIBASE_BM->unpinPage(dirPageId);
-		MINIBASE_BM->unpinPage(dataPageId);
+		MINIBASE_BM->unpinPage(dirPageId, true);
+		MINIBASE_BM->unpinPage(dataPageId, true);
 		return status;
 	} else return DONE;
 }
@@ -226,13 +222,12 @@ Status HeapFile::updateRecord (const RID& rid, char *recPtr, int recLen)
 	RID dataPageRid;
 	char *oldRecPtr;
 	int oldRecLen;
-	Status status;
 
 	if (findDataPage(rid, dirPageId, dirPage, dataPageId, dataPage, dataPageRid) == OK) {
 		//found record
-		status = dataPage->returnRecord(rid, oldRecPtr, oldRecLen);
-		MINIBASE_BM->unpinPage(dirPageId);
-		MINIBASE_BM->unpinPage(dataPageId);
+		dataPage->returnRecord(rid, oldRecPtr, oldRecLen);
+		MINIBASE_BM->unpinPage(dirPageId, true);
+		MINIBASE_BM->unpinPage(dataPageId, true);
 	} else return DONE;
 
 	if (oldRecLen != recLen) {
@@ -251,11 +246,9 @@ Status HeapFile::getRecord (const RID& rid, char *recPtr, int& recLen)
 	HFPage *dirPage, *dataPage;
 	RID dataPageRid;
 
-	Status status;
-
 	if (findDataPage(rid, dirPageId, dirPage, dataPageId, dataPage, dataPageRid) == OK) {
 		//found record
-		status = dataPage->getRecord(rid, recPtr, recLen);
+		dataPage->getRecord(rid, recPtr, recLen);
 		MINIBASE_BM->unpinPage(dirPageId);
 		MINIBASE_BM->unpinPage(dataPageId);
 		return OK;
@@ -274,8 +267,34 @@ Scan *HeapFile::openScan(Status& status)
 // Wipes out the heapfile from the database permanently. 
 Status HeapFile::deleteFile()
 {
-    // fill in the body
-    return OK;
+	PageId dirPageId = firstDirPageId;
+	PageId dataPageId;
+	HFPage *dirPage;
+	RID dataPageRid, nextRid;
+	int dpInfoRecLen;
+	DataPageInfo* dpInfoRecord;
+	char *dpInfoRecPtr;
+	Status status;
+	if (file_deleted == 1) return DONE;
+	while (dirPageId != INVALID_PAGE) {
+		status = MINIBASE_BM->pinPage(dirPageId, (Page *&) dirPage);
+		status = dirPage->firstRecord(dataPageRid);
+		while (status != DONE) {
+			dirPage->returnRecord(dataPageRid, dpInfoRecPtr, dpInfoRecLen);
+			dpInfoRecord = (DataPageInfo*) dpInfoRecPtr;
+			dataPageId = dpInfoRecord->pageId; // get ID of the data page, stored in DataPageInfo record
+			status = dirPage->nextRecord(dataPageRid, nextRid);
+			// free data page
+			MINIBASE_BM->freePage(dataPageId);
+			dataPageRid = nextRid;
+		}
+		status = MINIBASE_BM->unpinPage(dirPageId);
+		MINIBASE_BM->freePage(dirPageId);
+		dirPageId = dirPage->getNextPage();
+	}
+	status = MINIBASE_DB->delete_file_entry(fileName);
+	file_deleted = 1;
+    return status;
 }
 
 // ****************************************************************
@@ -352,7 +371,9 @@ Status allocateDirSpace(struct DataPageInfo * dpinfop,
                             PageId &allocDirPageId,
                             RID &allocDataPageRid)
 {
-    // fill in the body
+    // this should only need to be used in insertRecord() but insertRecord()
+	// takes care of calling MINIBASE_BM newPage() and adding a DataPageInfo
+	// record when needed, so this method is unused
     return OK;
 }
 
