@@ -78,6 +78,9 @@ public:
 
     ~BufMgr();           // Flush all valid dirty pages to disk
 
+    void printBufPool(Page*& Page); // delete; for debugging
+    void printHashTable();
+
     Status pinPage(PageId PageId_in_a_DB, Page*& page, int emptyPage);
         // Check if this page is in buffer pool, otherwise
         // find a frame for this page, read in and pin it.

@@ -26,8 +26,8 @@ TestDriver::TestDriver( const char* nameRoot )
     char logfname[len+20];
 
     sprintf( basename, "%s%ld", nameRoot, long(getpid()) );
-    sprintf( dbfname, "/tmp/%s.minibase-db", basename );
-    sprintf( logfname, "/tmp/%s.minibase-log", basename );
+    sprintf( dbfname, "/home/conniesun/mytmp/%s.minibase-db", basename );
+    sprintf( logfname, "/home/conniesun/mytmp/%s.minibase-log", basename );
 
     dbpath = strdup(dbfname);
     logpath = strdup(logfname);

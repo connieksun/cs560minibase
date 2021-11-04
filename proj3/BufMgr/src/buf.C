@@ -36,17 +36,17 @@ static error_string_table bufTable(BUFMGR,bufErrMsgs);
 //************************************************************
 
 BufMgr::BufMgr (int numbuf, Replacer *replacer) {
-	//cout << "start of constructor" << endl;
-	this->replacer = replacer;
+	this->replacer = NULL;
+	//cout << "start of constructor for " << numbuf << " buffers" << endl;
 	numBuffers = numbuf;
-	bufPool = (Page*)malloc(sizeof(Page)*numbuf);
-	memset(bufPool, 0, sizeof(Page)*numbuf);
+	bufPool = new Page[numbuf];
+	//cout << "bufPool " << bufPool[0] << endl;
 	frmeTable = new FrameDesc[numbuf];
 	hashTable = new BucketPair*[HTSIZE];
 	for (int i = 0; i < numbuf; i++) {
 		frmeTable[i].pageNo = INVALID_PAGE;
 		frmeTable[i].pin_cnt = 0;
-		frmeTable[i].dirty = 0;
+		frmeTable[i].dirty = false;
 	}
 	for (int i = 0; i < HTSIZE; i++)
 		hashTable[i] = NULL;
@@ -57,10 +57,31 @@ BufMgr::BufMgr (int numbuf, Replacer *replacer) {
 //** This is the implementation of ~BufMgr
 //************************************************************
 BufMgr::~BufMgr(){
+	//cout << "start of destructor" << endl;
 	for (int frame = 0; frame < numBuffers; frame++) {
 		if (frmeTable[frame].dirty) {
 			flushPage(frmeTable[frame].pageNo);
 		}
+	}
+	delete[] frmeTable;
+	delete[] bufPool;
+	for(int i = 0; i < HTSIZE; i++) {
+		delete hashTable[i];
+	}
+	delete[] hashTable;//delete the array of pointers
+}
+
+void BufMgr::printBufPool(Page*& page){
+	//cout << "*******contents of bufPool*******" << endl;
+	for (int i = 0; i < numBuffers; i++) {
+		cout << "frame " << i << ": ";
+		int pageId = frmeTable[i].pageNo;
+		if (pageId == INVALID_PAGE) {
+			cout << "INVALID_PAGE (frame table)" << endl;
+		}
+		page = &bufPool[i];
+		MINIBASE_DB->read_page(pageId, page);
+		cout << (char *)page << "\tpage id is " << pageId << "(frame table)" << endl;
 	}
 }
 
@@ -71,6 +92,7 @@ Status BufMgr::pinPage(PageId PageId_in_a_DB, Page*& page, int emptyPage) {
 	//cout << "start of pinPage for pageId " << PageId_in_a_DB << endl;
 	int frameNo = findFrame(PageId_in_a_DB);
 	if (frameNo != -1) { // page is already pinned in buffer
+		//cout << "already pinned in frame " << frameNo << endl;
 		frmeTable[frameNo].pin_cnt++;
 		return OK;
 	}
@@ -81,21 +103,22 @@ Status BufMgr::pinPage(PageId PageId_in_a_DB, Page*& page, int emptyPage) {
 			// found an empty frame; add page to frame table, buffer pool, and hash
 			frmeTable[frame].pageNo = PageId_in_a_DB;
 			frmeTable[frame].pin_cnt++;
-			page = bufPool + frame;
+			page = &bufPool[frame];
 			if (! emptyPage) {
 				//cout << "DB is reading the page" << endl;
 				Status status = MINIBASE_DB->read_page(PageId_in_a_DB, page);
+				if (status != OK)
+					return MINIBASE_CHAIN_ERROR(BUFMGR, status);
 				//cout << "DB read the page" << endl;
-				memcpy(bufPool + frame, page, sizeof(Page));
 				//cout << "copied page to bufPool array" << endl;
 			}
 			insertHTEntry(PageId_in_a_DB, frame);
-			//cout << "inserted successfully" << endl;
+			//cout << "empty: pinned page " << PageId_in_a_DB << " in frame " << frame << endl;
 			return OK;
 		}
 	}
 	// not already pinned, no empty frames; replace an existing page
-	//cout << "pin page by replacing" << endl;
+	// cout << "pin page by replacing" << endl;
 	PageId pageToReplace = getPageToReplace();
 	if (pageToReplace == -1)
 		return DONE; // could not pin page; buffer is full?
@@ -104,14 +127,17 @@ Status BufMgr::pinPage(PageId PageId_in_a_DB, Page*& page, int emptyPage) {
 	frmeTable[frame].pageNo = PageId_in_a_DB;
 	frmeTable[frame].pin_cnt = 0;
 	frmeTable[frame].dirty = 0;
+	page = &bufPool[frame];
 	// if page is not empty, read in new page
 	if (! emptyPage) {
-		MINIBASE_DB->read_page(PageId_in_a_DB, page);
-		memcpy(bufPool + frame, page, sizeof(Page));
+		Status status = MINIBASE_DB->read_page(PageId_in_a_DB, page);
+		if (status != OK)
+			return MINIBASE_CHAIN_ERROR(BUFMGR, status);
 	}
 	insertHTEntry(PageId_in_a_DB, frame);
 	removeHTEntry(pageToReplace);
 	frmeTable[frame].pin_cnt++;
+	//cout << "replace: pinned in frame " << frame << endl;
 	return OK;
 }//end pinPage
 
@@ -144,13 +170,17 @@ Status BufMgr::unpinPage(PageId page_num, int dirty=FALSE, int hate = FALSE){
 //** This is the implementation of newPage
 //************************************************************
 Status BufMgr::newPage(PageId& firstPageId, Page*& firstpage, int howmany) {
-	//cout << "start of newPage" << endl;
-	Status status = MINIBASE_DB->allocate_page(firstPageId, howmany);
-	status = pinPage(firstPageId, firstpage, 0);
-	if (status == DONE) {
-		MINIBASE_DB->deallocate_page(firstPageId, howmany);
-		return MINIBASE_FIRST_ERROR(BUFMGR, BUFFERFULL);
+	cout << "start of newPage for page " << firstPageId << endl;
+	int full = 1;
+	for (int frame = 0; frame < numBuffers; frame++) {
+		if (frmeTable[frame].pin_cnt == 0) full = 0;
 	}
+	if (full) return MINIBASE_FIRST_ERROR(BUFMGR, BUFFERFULL);
+	Status status = MINIBASE_DB->allocate_page(firstPageId, howmany);
+	if (status != OK) return MINIBASE_CHAIN_ERROR(BUFMGR, status);
+	status = pinPage(firstPageId, firstpage, 0);
+	if (status != OK)
+		MINIBASE_DB->deallocate_page(firstPageId, howmany);
 	return status;
 }
 
@@ -182,9 +212,12 @@ Status BufMgr::flushPage(PageId pageid) {
 	if (frame == -1) {
 		return MINIBASE_FIRST_ERROR(BUFMGR, BUFFERPAGENOTFOUND);
 	}
-	Page *page = bufPool + frame;
-	Status status = MINIBASE_DB->write_page(pageid, page);
-	return status;
+	if (frmeTable[frame].dirty) {
+		Page *page = &bufPool[frame];
+		Status status = MINIBASE_DB->write_page(pageid, page);
+		return status;
+	}
+	return OK;
 }
     
 //*************************************************************
@@ -193,7 +226,7 @@ Status BufMgr::flushPage(PageId pageid) {
 Status BufMgr::flushAllPages(){
 	//cout << "start of flushAllPages" << endl;
   for (int frame = 0; frame < numBuffers; frame++) {
-	  if (frmeTable[frame].pageNo != INVALID_PAGE) {
+	  if (frmeTable[frame].dirty) {
 		  flushPage(frmeTable[frame].pageNo);
 	  }
   }
@@ -206,6 +239,20 @@ Status BufMgr::flushAllPages(){
  */
 int BufMgr::hashPage(PageId pageId) {
 	return (3 * pageId + 5) % HTSIZE;
+}
+
+void BufMgr::printHashTable(){
+	//cout << "*******contents of hashTable*******" << endl;
+	for (int b = 0; b < HTSIZE; b++) {
+		cout << "bucket " << b << ": ";
+		BucketPair *cur = hashTable[b];
+		while (cur != NULL) {
+			cout << cur->pageNo << "," << cur->frameNo;
+			cout << "(ff:" << findFrame(cur->pageNo) << ") ";
+			cur = cur->next;
+		}
+		cout << endl;
+	}
 }
 /*
  * use the hash function to find the frame that a page belongs
@@ -232,10 +279,10 @@ int BufMgr::getPageToReplace() {
 	//cout << "start of getPageToReplace" << endl;
 	if (!hated.empty()) {
 		PageId toReplace = hated.top();
-//		if (loved.front() == toReplace) { // loved and hated
-//			hated.pop();
-//			toReplace = hated.top();
-//		}
+		if (loved.front() == toReplace) { // loved and hated
+			hated.pop();
+			toReplace = hated.top();
+		}
 		hated.pop();
 		// cout << "page to be written over is " << toReplace << endl;
 		return toReplace;
@@ -324,4 +371,3 @@ unsigned int BufMgr::getNumUnpinnedBuffers(){
   }
   return count;
 }
-

@@ -16,7 +16,7 @@ CFLAGS= -DUNIX -Wall -g
 
 INCLUDES = -I${MINIBASE}/include 
 
-LFLAGS= -L${MINIBASE}/lib -ldb -lm
+LFLAGS= -L${MINIBASE}/lib -ldb -lm -no-pie
 
 SRCS = main.C buf.C BMTester.C test_driver.C \
 		new_error.C page.C system_defs.C \
