@@ -65,7 +65,13 @@ BufMgr::~BufMgr(){
 	}
 	delete[] frmeTable;
 	delete[] bufPool;
+	BucketPair *tmp;
 	for(int i = 0; i < HTSIZE; i++) {
+		while (hashTable[i]) {
+			tmp = hashTable[i];
+			hashTable[i] = tmp->next;
+			delete tmp;
+		}
 		delete hashTable[i];
 	}
 	delete[] hashTable;//delete the array of pointers
@@ -93,6 +99,7 @@ Status BufMgr::pinPage(PageId PageId_in_a_DB, Page*& page, int emptyPage) {
 	int frameNo = findFrame(PageId_in_a_DB);
 	if (frameNo != -1) { // page is already pinned in buffer
 		//cout << "already pinned in frame " << frameNo << endl;
+		page = &bufPool[frameNo];
 		frmeTable[frameNo].pin_cnt++;
 		return OK;
 	}
@@ -170,7 +177,7 @@ Status BufMgr::unpinPage(PageId page_num, int dirty=FALSE, int hate = FALSE){
 //** This is the implementation of newPage
 //************************************************************
 Status BufMgr::newPage(PageId& firstPageId, Page*& firstpage, int howmany) {
-	cout << "start of newPage for page " << firstPageId << endl;
+	//cout << "start of newPage for page " << firstPageId << endl;
 	int full = 1;
 	for (int frame = 0; frame < numBuffers; frame++) {
 		if (frmeTable[frame].pin_cnt == 0) full = 0;
