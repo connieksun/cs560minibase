@@ -41,8 +41,16 @@ Status BTLeafPage::insertRec(const void *key,
                               RID dataRid,
                               RID& rid)
 {
-  // put your code here
-  return OK;
+  KeyDataEntry entry;
+  Datatype data;
+  data.rid = dataRid;
+  int entry_len;
+  make_entry(&entry, key_type, key, LEAF, data, &entry_len);
+  Status status = SortedPage::insertRecord(key_type, (char*)&entry, entry_len, rid);
+  if (status != OK) {
+    return MINIBASE_FIRST_ERROR(BTLEAFPAGE, INSERT_REC_FAILED);
+  }
+  return status;
 }
 
 /*
@@ -60,9 +68,32 @@ Status BTLeafPage::get_data_rid(void *key,
                                 AttrType key_type,
                                 RID & dataRid)
 {
-  // put your code here
-  return OK;
+  int low = 0;
+  int high = slotCnt - 1;
+  int mid;
+  int comp;
+  while (low <= high) {
+    mid = (high - low) / 2;
+    // case where we have holes in the slot dir
+    while (slot[mid].length == EMPTY_SLOT)
+      mid --;
+    if (mid < 0)
+      return RECNOTFOUND;
+    KeyDataEntry* entry = (KeyDataEntry *) data + slot[mid].offset;
+    comp = keyCompare(key, (void *) entry, key_type);
+    if (comp < 0)
+      low = mid + 1;
+    else if (comp > 0)
+      high = mid - 1;
+    else {
+      void *keyHolder;
+      get_key_data(keyHolder, (Datatype *) &dataRid, entry, slot[mid].length, LEAF);
+      return OK;
+    }
+  }
+  return RECNOTFOUND;
 }
+
 
 /* 
  * Status BTLeafPage::get_first (const void *key, RID & dataRid)
@@ -80,7 +111,15 @@ Status BTLeafPage::get_first (RID& rid,
                               void *key,
                               RID & dataRid)
 { 
-  // put your code here
+  Status status = HFPage::firstRecord(rid);
+  if (status == DONE)
+    return NOMORERECS;
+  // else, unpack the record into key and data pair
+  curIterRid = rid;
+  char* recPtr; 
+  int recLen;
+  HFPage::returnRecord(rid, recPtr, recLen);
+  get_key_data(key, (Datatype *) &dataRid, (KeyDataEntry *) recPtr, recLen, LEAF);
   return OK;
 }
 
@@ -88,6 +127,14 @@ Status BTLeafPage::get_next (RID& rid,
                              void *key,
                              RID & dataRid)
 {
-  // put your code here
+  Status status = HFPage::nextRecord(curIterRid, rid);
+  if (status == DONE)
+    return NOMORERECS;
+  // else, unpack the record into key and data pair
+  curIterRid = rid;
+  char* recPtr; 
+  int recLen;
+  HFPage::returnRecord(rid, recPtr, recLen);
+  get_key_data(key, (Datatype *) &dataRid, (KeyDataEntry *) recPtr, recLen, LEAF);
   return OK;
 }

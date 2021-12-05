@@ -25,7 +25,29 @@ BTreeFileScan::~BTreeFileScan()
 
 Status BTreeFileScan::get_next(RID & rid, void* keyptr)
 {
-  // put your code here
+  RID nextRid;
+  PageId nextPageId;
+  if (curLeafPage == NULL) return DONE;
+  RID cursorRid = curRid; 
+  Status status = curLeafPage->get_next(curRid, keyptr, nextRid);
+  while (status == NOMORERECS) {
+    // traverse to next non-empty leaf page
+    MINIBASE_BM->unpinPage(curLeafPage->page_no(), 0, 0);
+    nextPageId = curLeafPage->getNextPage();
+    if (nextPageId == INVALID_PAGE) {
+      curLeafPage = NULL;
+      return DONE;
+    }
+    MINIBASE_BM->pinPage(nextPageId, (Page *&) curLeafPage, 0);
+    status = curLeafPage->get_first(curRid, keyptr, nextRid);
+  }
+  if (hi_key != NULL) { // check end of range
+    if (keyCompare(keyptr, hi_key, key_type) > 0) {
+      return DONE;
+    }
+  }
+  rid = cursorRid;
+  curRid = nextRid;
   return OK;
 }
 
@@ -38,6 +60,5 @@ Status BTreeFileScan::delete_current()
 
 int BTreeFileScan::keysize() 
 {
-  // put your code here
-  return OK;
+  return btree->keysize();
 }
