@@ -42,7 +42,7 @@ Status SortedPage::insertRecord (AttrType key_type,
   Status status = HFPage::insertRecord(recPtr, recLen, rid);
   if (status != OK) return status;
   int curSlot, leftmost, rightmost;
-  // swap left or right to maintain sorted order
+  // swap left or right to maintain sorted order, worst-case O(n)
   while (true) {
     curSlot = rid.slotNo;
     leftmost = curSlot - 1;
