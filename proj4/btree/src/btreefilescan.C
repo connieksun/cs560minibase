@@ -19,12 +19,14 @@
 
 BTreeFileScan::~BTreeFileScan()
 {
+  //cout << "*****start of destructor for BTreeFileScan" << endl;
   // put your code here
 }
 
 
 Status BTreeFileScan::get_next(RID & rid, void* keyptr)
 {
+  cout << "*****start of get_next() for BTreeFileScan" << endl;
   RID nextRid;
   PageId nextPageId;
   if (curLeafPage == NULL || done) {
@@ -66,6 +68,7 @@ Status BTreeFileScan::get_next(RID & rid, void* keyptr)
 
 Status BTreeFileScan::delete_current()
 {
+  cout << "*****start of delete_current() for BTreeFileScan" << endl;
   // just_returned field tracks the RID returned
   // for the most recent call to get_next()
   if (just_deleted || curLeafPage == NULL || just_returned.slotNo == INVALID_SLOT)
@@ -84,5 +87,6 @@ Status BTreeFileScan::delete_current()
 
 int BTreeFileScan::keysize() 
 {
+  //cout << "*****start of keysize() for BTreeFileScan" << endl;
   return btree->keysize();
 }

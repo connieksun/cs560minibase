@@ -12,6 +12,9 @@
 #include "btfile.h"
 #include "btreefilescan.h"
 
+#include <iostream>
+using namespace std;
+
 // Define your error message here
 const char* BtreeErrorMsgs[] = {
   // Possible error messages
@@ -43,6 +46,7 @@ static error_string_table btree_table( BTREE, BtreeErrorMsgs);
 
 BTreeFile::BTreeFile (Status& returnStatus, const char *filename)
 {
+  //cout << "******start of constructor for existing BTreeFile: " << filename << endl;
   returnStatus = MINIBASE_DB->get_file_entry(filename, headerPageId);
   if (returnStatus != OK) {
     returnStatus = MINIBASE_FIRST_ERROR(BTREE, DATA_ENTRY_NOT_FOUND);
@@ -59,6 +63,7 @@ BTreeFile::BTreeFile (Status& returnStatus, const char *filename,
                       const AttrType keytype,
                       const int keysize)
 {
+  //cout << "*****start of constructor for new BTreeFile: " << filename << endl;
   returnStatus = MINIBASE_DB->get_file_entry(filename, headerPageId);
   if (returnStatus != OK) { // create file
     returnStatus = MINIBASE_BM->newPage(headerPageId, (Page *&) headerPage);
@@ -92,27 +97,29 @@ BTreeFile::BTreeFile (Status& returnStatus, const char *filename,
 
 BTreeFile::~BTreeFile ()
 {
+  //cout << "*****start of destructor for BTreeFile" << endl;
   // put your code here
 }
 
 Status BTreeFile::destroyFile ()
 {
+  //cout << "*****start of destroyFile() for BTreeFile" << endl;
   // put your code here
   return OK;
 }
 
 Status BTreeFile::insert(const void *key, const RID rid) {
+  cout << "*****start of insert() for BTreeFile" << endl;
+  int printKey = *(int *) key;
+  cout << "\t inserting key " << printKey << endl;
   Status status;
-  // KeyDataEntry* leafEntry;
-  // int entryLen;
-  // make_entry(&leafEntry, headerPage->key_type, key,
-  //               LEAF, (Datatype) rid, &entryLen);
-  recursiveInsert(headerPage->rootPageId, key, rid, NULL);
+  status = recursiveInsert(headerPage->rootPageId, key, rid, NULL);
   return status;
 }
 
 Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID rid,
                   KeyDataEntry *newChildEntry) {
+  //cout << "*****start of recursiveInsert() for BTreeFile" << endl;
   Status status;
   AttrType key_type = headerPage->key_type;
   SortedPage *curPage;
@@ -121,6 +128,7 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
   status = MINIBASE_BM->pinPage(curPageId, (Page *&) curPage, 0);
   short curPageType = curPage->get_type();
   if (curPageType == INDEX) {
+    cout << "splitting index page" << endl;
     BTIndexPage *curIndexPage = (BTIndexPage*) curPage;
     PageId childPageId;
     // get the right child page using search implementation from book
@@ -139,7 +147,7 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
       MINIBASE_BM->newPage(rightIndexPageId, (Page *&) rightIndexPage);
       rightIndexPage->init(rightIndexPageId);
       // what are we adding to this page? (newChildEntry key and pageNo)
-      splitIndexPage(curIndexPage, rightIndexPage, newChildEntry->key, newChildEntry->data.pageNo);
+      splitIndexPage(curIndexPage, rightIndexPage, &newChildEntry->key, newChildEntry->data.pageNo);
       KeyDataEntry *newEntry;  // entry that will be added to parent page
       Datatype newEntryPage; // hold pageId of new page that was made
       newEntryPage.pageNo = rightIndexPageId;
@@ -151,8 +159,13 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
       make_entry(newEntry, key_type, (void *) &rightPageFirstKey, INDEX, newEntryPage, &entryLen);
       newChildEntry = newEntry;
       if (curPageId == headerPage->rootPageId) {
-        // TODO: make a new index page with pointer to curIndexPage and new child entry
-        // make root of this tree point to new index page
+        BTIndexPage *newRoot;
+        PageId newRootId;
+        MINIBASE_BM->newPage(newRootId, (Page *&) newRoot);
+        newRoot->init(newRootId);
+        newRoot->setLeftLink(headerPage->rootPageId);
+        headerPage->rootPageId = newRootId;
+        newRoot->insertKey((void *) &newChildEntry->key, key_type, newChildEntry->data.pageNo, holderRid);
       }
     }
   } else if (curPageType == LEAF) {
@@ -168,6 +181,7 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
       newChildEntry = NULL;
       return OK;
     } else {
+      cout << "splitting leaf page" << endl;
       // page full, split leaf page to the right
       BTLeafPage *rightLeafPage;
       PageId rightLeafPageId;
@@ -175,7 +189,7 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
       rightLeafPage->init(rightLeafPageId);
       // TODO: split and shift records
       // what are we adding to this page? (key and rid)
-      splitLeafPage(curLeafPage, rightLeafPage, key, rid);
+      splitLeafPage(curLeafPage, rightLeafPage, (Keytype *) key, rid);
       // make new child entry for parent
       KeyDataEntry *newEntry;  // entry that will be added to parent page
       Datatype newEntryPage; // hold pageId of new page that was made
@@ -200,32 +214,33 @@ Status BTreeFile::recursiveInsert(PageId curPageId, const void *key, const RID r
  *    - both pages should have same number of entries (or off by 1 if odd)
  * 2. insert the new entry onto the correct page (right if key >= first key on right)
  */
-Status BTreeFile::splitIndexPage(BTIndexPage *left, BTIndexPage *right, Keytype key, PageId pageId){
+Status BTreeFile::splitIndexPage(BTIndexPage *left, BTIndexPage *right, Keytype *key, PageId pageId){
+  //cout << "*****start of splitIndexPage() for BTreeFile" << endl;
   int totalRecs = left->numberOfRecords();
   int half = totalRecs / 2; // index of slot dir to start moving
   RID ridHolder;
   Keytype keyHolder;
   PageId pageHolder, leftLink;
-  Status status = left->get_first(ridHolder, keyHolder, pageHolder);
+  Status status = left->get_first(ridHolder, (void *) &keyHolder, pageHolder);
   for (int i = 0; i < half; i++) {
-    status = left->get_next(ridHolder, keyHolder, pageHolder);
+    status = left->get_next(ridHolder, (void *) &keyHolder, pageHolder);
     if (i == half - 2)
       leftLink = pageHolder;
   } // now we are halfway through the page
   while (status != OK) {
     status = left->deleteKey((void *) &keyHolder, headerPage->key_type, ridHolder);
     status = right->insertKey((void *) &keyHolder, headerPage->key_type, pageHolder, ridHolder);
-    status = left->get_next(ridHolder, (void *) &keyHolder, pageHolder)
+    status = left->get_next(ridHolder, (void *) &keyHolder, pageHolder);
   }
   // need to update the left link of the right page; point to the rightmost page of the left
   right->setLeftLink(leftLink);
   // now we actually insert the rec we want to insert
   // first find if it should go on the left or right page
-  status = right->get_first(ridHolder, keyHolder, pageHolder);
-  if (keyCompare(key, keyHolder, headerPage->key_type) >= 0) {
-    right->insertKey(key, headerPage->key_type, pageId, ridHolder);
+  status = right->get_first(ridHolder, (void *) &keyHolder, pageHolder);
+  if (keyCompare((void *) &key, (void *) &keyHolder, headerPage->key_type) >= 0) {
+    right->insertKey((void *) &key, headerPage->key_type, pageId, ridHolder);
   } else {
-    left->insertKey(key, headerPage->key_type, pageId, ridHolder);
+    left->insertKey((void *) &key, headerPage->key_type, pageId, ridHolder);
   }
   
   return OK;
@@ -237,17 +252,41 @@ Status BTreeFile::splitIndexPage(BTIndexPage *left, BTIndexPage *right, Keytype 
  * 2. insert the new data record onto the correct page
  * 3. update the linked list
  */
-Status BTreeFile::splitLeafPage(BTLeafPage *left, BTLeafPage *right, Keytype key, RID rid){
-  // TODO
-  // and update the linked list -- move this into split func
-  // PageId oldNext = curLeafPage->getNextPage();
-  // curLeafPage->setNextPage(rightLeafPageId);
-  // rightLeafPage->setPrevPage(curLeafPage->page_no());
-  // rightLeafPage->setNextPage(oldNext);
+Status BTreeFile::splitLeafPage(BTLeafPage *left, BTLeafPage *right, Keytype *key, RID rid)
+{
+  //cout << "*****start of splitLeafPage() for BTreeFile" << endl;
+  int totalRecs = left->numberOfRecords();
+  int half = totalRecs / 2; // index of slot dir to start moving
+  RID ridHolder;
+  Keytype keyHolder;
+  RID dataRidHolder;
+  Status status = left->get_first(ridHolder, (void *) &keyHolder, dataRidHolder);
+  for (int i = 0; i < half; i++) {
+    status = left->get_next(ridHolder, (void *) &keyHolder, dataRidHolder);
+  } // now we are halfway through the page
+  while (status != OK) {
+    status = left->deleteRecord(ridHolder);
+    status = right->insertRec((void *) &keyHolder, headerPage->key_type, dataRidHolder, ridHolder);
+    status = left->get_next(ridHolder, (void *) &keyHolder, dataRidHolder);
+  }
+  // now we actually insert the rec we want to insert
+  // first find if it should go on the left or right page
+  status = right->get_first(ridHolder, (void *) &keyHolder, dataRidHolder);
+  if (keyCompare((void *) &key, (void *) &keyHolder, headerPage->key_type) >= 0) {
+    right->insertRec((void *) &key, headerPage->key_type, rid, ridHolder);
+  } else {
+    left->insertRec((void *) &key, headerPage->key_type, rid, ridHolder);
+  }
+  // update linked list
+  PageId oldNext = left->getNextPage();
+  left->setNextPage(right->page_no());
+  right->setPrevPage(left->page_no());
+  right->setNextPage(oldNext);
   return OK;
 }
 
 Status BTreeFile::Delete(const void *key, const RID rid) {
+  //cout << "*****start of Delete() for BTreeFile" << endl;
   // can just open up a scan and keep deleting
   RID ridHolder;
   void *keyHolder;
@@ -263,6 +302,7 @@ Status BTreeFile::Delete(const void *key, const RID rid) {
 }
     
 IndexFileScan *BTreeFile::new_scan(const void *lo_key, const void *hi_key) {
+  //cout << "*****start of new_scan() for BTreeFile" << endl;
   BTreeFileScan *scan = new BTreeFileScan();
   scan->lo_key = lo_key;
   scan->hi_key = hi_key;
@@ -277,6 +317,7 @@ IndexFileScan *BTreeFile::new_scan(const void *lo_key, const void *hi_key) {
 }
 
 Status BTreeFile::setUpScan(BTreeFileScan *scan){
+  //cout << "*****start of setUpScan() for BTreeFile" << endl;
   // TODO: intiialize the scan by setting the scan pointer to the first rec
   // that matches lo_key
   // if lo_key is NULL, go all the way left. else search tree
@@ -327,5 +368,6 @@ Status BTreeFile::setUpScan(BTreeFileScan *scan){
 }
 
 int BTreeFile::keysize(){
+  //cout << "*****start of keysize() for BTreeFile" << endl;
   return headerPage->key_size;
 }

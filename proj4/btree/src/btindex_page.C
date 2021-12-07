@@ -21,6 +21,7 @@ Status BTIndexPage::insertKey (const void *key,
                                PageId pageNo,
                                RID& rid)
 {
+  //cout << "*****start of insertKey() for BTIndexPage" << endl;
   KeyDataEntry entry;
   Datatype data;
   data.pageNo = pageNo;
@@ -35,6 +36,7 @@ Status BTIndexPage::insertKey (const void *key,
 
 Status BTIndexPage::deleteKey (const void *key, AttrType key_type, RID& curRid)
 {
+  //cout << "*****start of deleteKey() for BTIndexPage" << endl;
   // given the key, need to find the RID on the page
   // then need to delete the record
   void *curKey;
@@ -55,6 +57,7 @@ Status BTIndexPage::get_page_no(const void *key,
                                 AttrType key_type,
                                 PageId & pageNo)
 {
+  //cout << "*****start of get_page_no() for BTIndexPage" << endl;
   // search routine from book
   void *curKey; // tracks key in the page
   PageId curPageId;
@@ -87,6 +90,7 @@ Status BTIndexPage::get_first(RID& rid,
                               void *key,
                               PageId & pageNo)
 {
+  //cout << "*****start of get_first() for BTIndexPage" << endl;
   Status status = HFPage::firstRecord(rid);
   if (status == DONE)
     return NOMORERECS;
@@ -101,6 +105,7 @@ Status BTIndexPage::get_first(RID& rid,
 
 Status BTIndexPage::get_next(RID& rid, void *key, PageId & pageNo)
 {
+  //cout << "*****start of get_next() for BTIndexPage" << endl;
   Status status = HFPage::nextRecord(curIterRid, rid);
   if (status == DONE)
     return NOMORERECS;

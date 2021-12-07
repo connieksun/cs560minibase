@@ -41,6 +41,7 @@ Status BTLeafPage::insertRec(const void *key,
                               RID dataRid,
                               RID& rid)
 {
+  //cout << "*****start of insertRec() for BTLeafPage" << endl;
   KeyDataEntry entry;
   Datatype data;
   data.rid = dataRid;
@@ -67,6 +68,7 @@ Status BTLeafPage::get_data_rid(void *key,
                                 AttrType key_type,
                                 RID & dataRid)
 {
+  //cout << "*****start of get_data_rid() for BTLeafPage" << endl;
   int low = 0;
   int high = slotCnt - 1;
   int mid, comp;
@@ -105,6 +107,8 @@ Status BTLeafPage::get_first (RID& rid,
                               void *key,
                               RID & dataRid)
 { 
+  // infinite loop
+  cout << "*****start of get_first() for BTLeafPage" << endl;
   Status status = HFPage::firstRecord(rid);
   if (status == DONE)
     return NOMORERECS;
@@ -121,6 +125,7 @@ Status BTLeafPage::get_next (RID& rid,
                              void *key,
                              RID & dataRid)
 {
+  cout << "*****start of get_next() for BTLeafPage" << endl;
   // we are now directly using the slot array instead of HFPage
   // because SortedPage messes up the RIDs of the page entries
   curIterSlot += 1;
