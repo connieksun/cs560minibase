@@ -27,33 +27,57 @@ Status BTreeFileScan::get_next(RID & rid, void* keyptr)
 {
   RID nextRid;
   PageId nextPageId;
-  if (curLeafPage == NULL) return DONE;
-  RID cursorRid = curRid; 
+  if (curLeafPage == NULL || done) {
+    just_returned.slotNo = INVALID_SLOT;
+    just_returned.pageNo = INVALID_PAGE;
+    return DONE;
+  }
+  RID cursorRid = curRid; // tracks the next thing for scan to return
+  // now we are going to iterate curRid to next record
   Status status = curLeafPage->get_next(curRid, keyptr, nextRid);
   while (status == NOMORERECS) {
     // traverse to next non-empty leaf page
     MINIBASE_BM->unpinPage(curLeafPage->page_no(), 0, 0);
     nextPageId = curLeafPage->getNextPage();
+    // case 1 to end scan: no pages left, done
     if (nextPageId == INVALID_PAGE) {
       curLeafPage = NULL;
-      return DONE;
+      done = true;
+      break;
     }
     MINIBASE_BM->pinPage(nextPageId, (Page *&) curLeafPage, 0);
     status = curLeafPage->get_first(curRid, keyptr, nextRid);
   }
-  if (hi_key != NULL) { // check end of range
+  // case 2 to end scan: reached end of scan bounds, done
+  if (hi_key != NULL && curLeafPage != NULL) {
     if (keyCompare(keyptr, hi_key, key_type) > 0) {
-      return DONE;
+      MINIBASE_BM->unpinPage(curLeafPage->page_no(), 0, 0);
+      done = true;
     }
   }
-  rid = cursorRid;
-  curRid = nextRid;
+  rid = cursorRid; // next thing that has not been returned
+  RID just_returned;
+  just_returned.slotNo = curLeafPage->curIterSlot;
+  just_returned.pageNo = curLeafPage->page_no();
+  just_deleted = false; 
+  curRid = nextRid; // ready to return for next time
   return OK;
 }
 
 Status BTreeFileScan::delete_current()
 {
-  // put your code here
+  // just_returned field tracks the RID returned
+  // for the most recent call to get_next()
+  if (just_deleted || curLeafPage == NULL || just_returned.slotNo == INVALID_SLOT)
+    return MINIBASE_FIRST_ERROR(BTREE, SORTED_PAGE_DELETE_CURRENT_FAILED);
+  RID ridToDelete = just_returned;
+  BTLeafPage *pageToDeleteFrom;
+  MINIBASE_BM->pinPage(ridToDelete.pageNo, (Page *&) pageToDeleteFrom, 0);
+  pageToDeleteFrom->deleteRecord(ridToDelete);
+  // now the slot directory has changed for this page
+  pageToDeleteFrom->curIterSlot--;
+  MINIBASE_BM->unpinPage(ridToDelete.pageNo, 0, 0);
+  just_deleted = true;
   return OK;
 }
 

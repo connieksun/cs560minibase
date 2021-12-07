@@ -47,9 +47,8 @@ Status BTLeafPage::insertRec(const void *key,
   int entry_len;
   make_entry(&entry, key_type, key, LEAF, data, &entry_len);
   Status status = SortedPage::insertRecord(key_type, (char*)&entry, entry_len, rid);
-  if (status != OK) {
+  if (status != OK)
     return MINIBASE_FIRST_ERROR(BTLEAFPAGE, INSERT_REC_FAILED);
-  }
   return status;
 }
 
@@ -70,16 +69,11 @@ Status BTLeafPage::get_data_rid(void *key,
 {
   int low = 0;
   int high = slotCnt - 1;
-  int mid;
-  int comp;
+  int mid, comp;
+  KeyDataEntry* entry;
   while (low <= high) {
     mid = (high - low) / 2;
-    // case where we have holes in the slot dir
-    while (slot[mid].length == EMPTY_SLOT)
-      mid --;
-    if (mid < 0)
-      return RECNOTFOUND;
-    KeyDataEntry* entry = (KeyDataEntry *) data + slot[mid].offset;
+    entry = (KeyDataEntry *) data + slot[mid].offset;
     comp = keyCompare(key, (void *) entry, key_type);
     if (comp < 0)
       low = mid + 1;
@@ -115,11 +109,11 @@ Status BTLeafPage::get_first (RID& rid,
   if (status == DONE)
     return NOMORERECS;
   // else, unpack the record into key and data pair
-  curIterRid = rid;
-  char* recPtr; 
+  curIterSlot = 0;
   int recLen;
-  HFPage::returnRecord(rid, recPtr, recLen);
-  get_key_data(key, (Datatype *) &dataRid, (KeyDataEntry *) recPtr, recLen, LEAF);
+  recLen = slot[curIterSlot].length;
+  KeyDataEntry *entryPointer = (KeyDataEntry *) data + slot[curIterSlot].offset;
+  get_key_data(key, (Datatype *) &dataRid, entryPointer, recLen, LEAF);
   return OK;
 }
 
@@ -127,14 +121,17 @@ Status BTLeafPage::get_next (RID& rid,
                              void *key,
                              RID & dataRid)
 {
-  Status status = HFPage::nextRecord(curIterRid, rid);
-  if (status == DONE)
+  // we are now directly using the slot array instead of HFPage
+  // because SortedPage messes up the RIDs of the page entries
+  curIterSlot += 1;
+  if (curIterSlot >= slotCnt)
     return NOMORERECS;
+  rid.pageNo = curPage;
+  rid.slotNo = curIterSlot;
   // else, unpack the record into key and data pair
-  curIterRid = rid;
-  char* recPtr; 
   int recLen;
-  HFPage::returnRecord(rid, recPtr, recLen);
-  get_key_data(key, (Datatype *) &dataRid, (KeyDataEntry *) recPtr, recLen, LEAF);
+  recLen = slot[curIterSlot].length;
+  KeyDataEntry *entryPointer = (KeyDataEntry *) data + slot[curIterSlot].offset;
+  get_key_data(key, (Datatype *) &dataRid, entryPointer , recLen, LEAF);
   return OK;
 }
