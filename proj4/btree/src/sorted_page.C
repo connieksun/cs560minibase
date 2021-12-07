@@ -10,9 +10,9 @@
 #include "btleaf_page.h"
 
 const char* SortedPage::Errors[SortedPage::NR_ERRORS] = {
-  //OK,
-  //Insert Record Failed (SortedPage::insertRecord),
-  //Delete Record Failed (SortedPage::deleteRecord,
+  "OK",
+  "Insert Record Failed (SortedPage::insertRecord)",
+  "Delete Record Failed (SortedPage::deleteRecord)",
 };
 
 
@@ -41,34 +41,22 @@ Status SortedPage::insertRecord (AttrType key_type,
 {
   Status status = HFPage::insertRecord(recPtr, recLen, rid);
   if (status != OK) return status;
-  int curSlot, leftmost, rightmost;
-  // swap left or right to maintain sorted order, worst-case O(n)
-  while (true) {
-    curSlot = rid.slotNo;
-    leftmost = curSlot - 1;
-    rightmost = curSlot + 1;
-    while (leftmost >= 0 && slot[leftmost].length == EMPTY_SLOT)
-      leftmost --; // skip empty slots
-    while (rightmost < slotCnt && slot[rightmost].length == EMPTY_SLOT)
-      rightmost ++; // skip empty slots
+  int curSlot = rid.slotNo;
+  int leftSlot;
+  // swap left to maintain sorted order, worst-case O(n)
+  while (curSlot > 0) {
+    leftSlot = curSlot - 1;
     char *curKey = data + slot[curSlot].offset;
-    char *rightKey = data + slot[rightmost].offset;
-		char *leftKey = data + slot[leftmost].offset;
-    if (leftmost >= 0 && keyCompare((void*)curKey, (void*)leftKey, key_type) < 0) {
+		char *leftKey = data + slot[leftSlot].offset;
+    if (keyCompare((void*)curKey, (void*)leftKey, key_type) < 0) {
       slot_t tmp_slot;
       tmp_slot  = slot[curSlot];
-      slot[curSlot]  = slot[leftmost];
-      slot[leftmost] = tmp_slot;
-      rid.slotNo = leftmost;
-    }
-    else if (rightmost < slotCnt && keyCompare((void*)curKey, (void*)rightKey, key_type) > 0) {
-      slot_t tmp_slot;
-      tmp_slot  = slot[curSlot];
-      slot[curSlot]  = slot[rightmost];
-      slot[rightmost] = tmp_slot;
-      rid.slotNo = rightmost;
+      slot[curSlot]  = slot[leftSlot];
+      slot[leftSlot] = tmp_slot;
+      rid.slotNo = leftSlot;
     }
     else break;
+    curSlot = rid.slotNo;
   }
   return OK;
 }
@@ -82,15 +70,15 @@ Status SortedPage::insertRecord (AttrType key_type,
 
 Status SortedPage::deleteRecord (const RID& rid)
 {
-  return HFPage::deleteRecord(rid);
+  Status status = HFPage::deleteRecord(rid);
+  if (status != OK)
+    return MINIBASE_FIRST_ERROR(SORTEDPAGE, DELETE_REC_FAILED);
+  // remove a hole if we delete a record to make things easier later
+  HFPage::removeSlotHoles();
+  return status;
 }
 
 int SortedPage::numberOfRecords()
 {
-  int count = 0;
-  for (int i = 0; i < slotCnt; i++) {
-    if (slot[i].length != EMPTY_SLOT)
-      count ++;
-  }
-  return count;
+  return slotCnt;
 }

@@ -57,7 +57,6 @@ Status BTIndexPage::get_page_no(const void *key,
 {
   // search routine from book
   void *curKey; // tracks key in the page
-  void *prevKey; // tracks previous key in the page
   PageId curPageId;
   PageId prevPageId;
   RID curRid;
@@ -71,7 +70,6 @@ Status BTIndexPage::get_page_no(const void *key,
   // pageId of rec w/ key is for page with recs whose keys are >= key
   while (comp <= 0) {
     prevPageId = curPageId;
-    prevKey = curKey;
     status = get_next(curRid, curKey, curPageId);
     if (status == NOMORERECS) {
       pageNo = prevPageId; // rightmost link

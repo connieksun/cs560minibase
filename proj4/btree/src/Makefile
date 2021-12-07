@@ -23,6 +23,10 @@ SRCS =  main.C btree_driver.C btfile.C btindex_page.C \
 	btleaf_page.C buf.C new_error.C key.C \
 	btreefilescan.C system_defs.C page.C sorted_page.C hfpage.C
 
+# SRC = main.C btree_driver.C btfile.C btindex_page.C \
+# 	btleaf_page.C btreefilescan.C key.C \
+# 	new_error.C sorted_page.C system_defs.C
+
 OBJS = $(SRCS:.C=.o)
 
 $(MAIN):  $(OBJS)

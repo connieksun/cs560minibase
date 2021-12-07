@@ -140,6 +140,23 @@ Status HFPage::deleteRecord(const RID& rid)
     return OK;
 }
 
+void HFPage::removeSlotHoles() {
+    int iHole = -1; // index of the hole
+    for (int i = 0; i < slotCnt; i++) {
+        if (slot[i].length == EMPTY_SLOT) {
+            iHole = i;
+            break;
+        }
+    }
+    if (iHole == -1) return; // nothing to compact
+    // copy everything over to the left one space
+    for (int i = iHole; i < slotCnt - 1; i++) {
+        slot[i] = slot[i+1];
+    }
+    freeSpace += sizeof(slot_t);
+    slotCnt--;
+}
+
 // **********************************************************
 // returns RID of first record on page
 Status HFPage::firstRecord(RID& firstRid)
