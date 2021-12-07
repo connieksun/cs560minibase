@@ -24,6 +24,7 @@
  */
 int keyCompare(const void *key1, const void *key2, AttrType t)
 {
+  //cout << "*****start of keyCompare() for key" << endl;
   Keytype* keytype1 = (Keytype*)key1;
   Keytype* keytype2 = (Keytype*)key2;
   if (t == attrInteger)
@@ -48,6 +49,7 @@ void make_entry(KeyDataEntry *target,
                 nodetype ndtype, Datatype data,
                 int *pentry_len)
 {
+  //cout << "*****start of make_entry() for key" << endl;
   target = new KeyDataEntry();
   // copy the key based on int or char
   int key_len = get_key_length(key, key_type);
@@ -77,6 +79,7 @@ void make_entry(KeyDataEntry *target,
 void get_key_data(void *targetkey, Datatype *targetdata,
                   KeyDataEntry *psource, int entry_len, nodetype ndtype)
 {
+  //cout << "*****start of get_key_data() for key" << endl;
   int data_len;
   if (ndtype == INDEX) // index page, so record is of form (key, pageNo)
     data_len = sizeof(PageId);
@@ -100,6 +103,7 @@ void get_key_data(void *targetkey, Datatype *targetdata,
  */
 int get_key_length(const void *key, const AttrType key_type)
 {
+  //cout << "*****start of get_key_length() for key" << endl;
   if (key_type == attrInteger)
     return sizeof(int);
   else if (key_type == attrString)
@@ -116,6 +120,7 @@ int get_key_length(const void *key, const AttrType key_type)
 int get_key_data_length(const void *key, const AttrType key_type, 
                         const nodetype ndtype)
 {
+  //cout << "*****start of get_key_data_length() for key" << endl;
  int key_length = get_key_length(key, key_type);
  if (ndtype == INDEX) // index page, so record is of form (key, pageNo)
    return key_length + sizeof(PageId);

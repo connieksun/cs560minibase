@@ -39,6 +39,7 @@ Status SortedPage::insertRecord (AttrType key_type,
                                  int recLen,
                                  RID& rid)
 {
+  cout << "*****start of insertRecord() for SortedPage" << endl;
   Status status = HFPage::insertRecord(recPtr, recLen, rid);
   if (status != OK) return status;
   int curSlot = rid.slotNo;
@@ -70,6 +71,7 @@ Status SortedPage::insertRecord (AttrType key_type,
 
 Status SortedPage::deleteRecord (const RID& rid)
 {
+  cout << "*****start of deleteRecord() for SortedPage" << endl;
   Status status = HFPage::deleteRecord(rid);
   if (status != OK)
     return MINIBASE_FIRST_ERROR(SORTEDPAGE, DELETE_REC_FAILED);
