@@ -41,15 +41,21 @@ Status BTLeafPage::insertRec(const void *key,
                               RID dataRid,
                               RID& rid)
 {
-  //cout << "*****start of insertRec() for BTLeafPage" << endl;
-  KeyDataEntry entry;
+  KeyDataEntry *entry = new KeyDataEntry;
   Datatype data;
   data.rid = dataRid;
   int entry_len;
-  make_entry(&entry, key_type, key, LEAF, data, &entry_len);
-  Status status = SortedPage::insertRecord(key_type, (char*)&entry, entry_len, rid);
+  make_entry(entry, key_type, key, LEAF, data, &entry_len);
+  Status status = SortedPage::insertRecord(key_type, (char *) entry, entry_len, rid);
   if (status != OK)
     return MINIBASE_FIRST_ERROR(BTLEAFPAGE, INSERT_REC_FAILED);
+    
+  // RID printRid, printDataRid;
+	// Keytype printKey;
+  // cout <<"after calling sorted page" << endl;
+  // get_first(printRid, &printKey, printDataRid);
+  // cout << "Page/slot: " << printDataRid.pageNo << '/'
+	// 			<< printDataRid.slotNo << " Key: " << printKey.intkey << endl;
   return status;
 }
 
@@ -68,11 +74,10 @@ Status BTLeafPage::get_data_rid(void *key,
                                 AttrType key_type,
                                 RID & dataRid)
 {
-  //cout << "*****start of get_data_rid() for BTLeafPage" << endl;
   int low = 0;
   int high = slotCnt - 1;
   int mid, comp;
-  KeyDataEntry* entry;
+  KeyDataEntry* entry = new KeyDataEntry;
   while (low <= high) {
     mid = (high - low) / 2;
     entry = (KeyDataEntry *) data + slot[mid].offset;
@@ -82,8 +87,8 @@ Status BTLeafPage::get_data_rid(void *key,
     else if (comp > 0)
       high = mid - 1;
     else {
-      void *keyHolder;
-      get_key_data(keyHolder, (Datatype *) &dataRid, entry, slot[mid].length, LEAF);
+      Keytype keyHolder;
+      get_key_data(&keyHolder, (Datatype *) &dataRid, entry, slot[mid].length, LEAF);
       return OK;
     }
   }
@@ -107,17 +112,19 @@ Status BTLeafPage::get_first (RID& rid,
                               void *key,
                               RID & dataRid)
 { 
-  // infinite loop
-  cout << "*****start of get_first() for BTLeafPage" << endl;
-  Status status = HFPage::firstRecord(rid);
-  if (status == DONE)
-    return NOMORERECS;
-  // else, unpack the record into key and data pair
+  //Status status = HFPage::firstRecord(rid);
   curIterSlot = 0;
-  int recLen;
-  recLen = slot[curIterSlot].length;
-  KeyDataEntry *entryPointer = (KeyDataEntry *) data + slot[curIterSlot].offset;
-  get_key_data(key, (Datatype *) &dataRid, entryPointer, recLen, LEAF);
+  if (slotCnt == 0) {
+    return NOMORERECS;
+  }
+  rid.pageNo = curPage;
+  rid.slotNo = curIterSlot;
+  // else, unpack the record into key and data pair
+  get_key_data(key, (Datatype *) &dataRid,
+      (KeyDataEntry *)(data + slot[curIterSlot].offset),
+      slot[curIterSlot].length,
+			LEAF);
+  
   return OK;
 }
 
@@ -125,18 +132,19 @@ Status BTLeafPage::get_next (RID& rid,
                              void *key,
                              RID & dataRid)
 {
-  cout << "*****start of get_next() for BTLeafPage" << endl;
   // we are now directly using the slot array instead of HFPage
   // because SortedPage messes up the RIDs of the page entries
+
   curIterSlot += 1;
-  if (curIterSlot >= slotCnt)
+  if (curIterSlot >= slotCnt) {
     return NOMORERECS;
+  }
   rid.pageNo = curPage;
   rid.slotNo = curIterSlot;
   // else, unpack the record into key and data pair
-  int recLen;
-  recLen = slot[curIterSlot].length;
-  KeyDataEntry *entryPointer = (KeyDataEntry *) data + slot[curIterSlot].offset;
-  get_key_data(key, (Datatype *) &dataRid, entryPointer , recLen, LEAF);
+  get_key_data(key, (Datatype *) &dataRid,
+			(KeyDataEntry *)(data + slot[curIterSlot].offset),
+			slot[curIterSlot].length,
+			LEAF);
   return OK;
 }

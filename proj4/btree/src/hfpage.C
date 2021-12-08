@@ -102,7 +102,9 @@ Status HFPage::insertRecord(char* recPtr, int recLen, RID& rid)
     rid.pageNo = curPage;
     rid.slotNo = freeSlot;
     // copy into data
-    memcpy(data + usedPtr, recPtr, recLen);
+    for (int i = 0 ; i != recLen; ++i){
+		data[usedPtr-recLen+i]=recPtr[i];
+	}
     return OK;
 }
 
