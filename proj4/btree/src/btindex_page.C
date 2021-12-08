@@ -21,13 +21,12 @@ Status BTIndexPage::insertKey (const void *key,
                                PageId pageNo,
                                RID& rid)
 {
-  //cout << "*****start of insertKey() for BTIndexPage" << endl;
-  KeyDataEntry entry;
+  KeyDataEntry *entry = new KeyDataEntry;
   Datatype data;
   data.pageNo = pageNo;
   int entry_len;
-  make_entry(&entry, key_type, key, INDEX, data, &entry_len);
-  Status status = SortedPage::insertRecord(key_type, (char*)&entry, entry_len, rid);
+  make_entry(entry, key_type, key, INDEX, data, &entry_len);
+  Status status = SortedPage::insertRecord(key_type, (char*)entry, entry_len, rid);
   if (status != OK) {
     return MINIBASE_FIRST_ERROR(BTINDEXPAGE, INSERT_REC_FAILED);
   }
@@ -36,15 +35,14 @@ Status BTIndexPage::insertKey (const void *key,
 
 Status BTIndexPage::deleteKey (const void *key, AttrType key_type, RID& curRid)
 {
-  //cout << "*****start of deleteKey() for BTIndexPage" << endl;
   // given the key, need to find the RID on the page
   // then need to delete the record
-  void *curKey;
+  Keytype curKey;
   PageId curPageId;
-  Status status = get_first(curRid, curKey, curPageId);
+  Status status = get_first(curRid, &curKey, curPageId);
   if (status == NOMORERECS) return DONE;
-  while (keyCompare(curKey, key, key_type) != 0) {
-    status = get_next(curRid, curKey, curPageId);
+  while (keyCompare(&curKey, key, key_type) != 0) {
+    status = get_next(curRid, &curKey, curPageId);
     // if we don't find the key on the page, return DONE
     if (status == NOMORERECS) return DONE;
   }
@@ -57,15 +55,14 @@ Status BTIndexPage::get_page_no(const void *key,
                                 AttrType key_type,
                                 PageId & pageNo)
 {
-  //cout << "*****start of get_page_no() for BTIndexPage" << endl;
   // search routine from book
-  void *curKey; // tracks key in the page
+  Keytype curKey; // tracks key in the page
   PageId curPageId;
   PageId prevPageId;
   RID curRid;
-  Status status = get_first(curRid, curKey, curPageId);
+  Status status = get_first(curRid, &curKey, curPageId);
   if (status == NOMORERECS) return DONE;
-  int comp = keyCompare(curKey, key, key_type);
+  int comp = keyCompare(&curKey, key, key_type);
   if (comp > 0) {
     pageNo = getLeftLink();
     return OK;
@@ -73,12 +70,12 @@ Status BTIndexPage::get_page_no(const void *key,
   // pageId of rec w/ key is for page with recs whose keys are >= key
   while (comp <= 0) {
     prevPageId = curPageId;
-    status = get_next(curRid, curKey, curPageId);
+    status = get_next(curRid, &curKey, curPageId);
     if (status == NOMORERECS) {
       pageNo = prevPageId; // rightmost link
       return OK;
     }
-    comp = keyCompare(curKey, key, key_type);
+    comp = keyCompare(&curKey, key, key_type);
   }
   // we should be one ahead here, so return previous
   pageNo = prevPageId;
@@ -90,7 +87,6 @@ Status BTIndexPage::get_first(RID& rid,
                               void *key,
                               PageId & pageNo)
 {
-  //cout << "*****start of get_first() for BTIndexPage" << endl;
   Status status = HFPage::firstRecord(rid);
   if (status == DONE)
     return NOMORERECS;
@@ -105,7 +101,6 @@ Status BTIndexPage::get_first(RID& rid,
 
 Status BTIndexPage::get_next(RID& rid, void *key, PageId & pageNo)
 {
-  //cout << "*****start of get_next() for BTIndexPage" << endl;
   Status status = HFPage::nextRecord(curIterRid, rid);
   if (status == DONE)
     return NOMORERECS;
